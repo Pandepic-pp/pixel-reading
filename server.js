@@ -1,6 +1,9 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const store = require('./lib/store');
+const { parseUserAgent } = require('./lib/ua');
+const { summarize } = require('./lib/summarize');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,13 +14,20 @@ const PIXEL = Buffer.from(
   'base64'
 );
 
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/track/:id.png', (req, res) => {
   const { id } = req.params;
+  const userAgent = req.headers['user-agent'] || null;
+  const { browser, os, device } = parseUserAgent(userAgent);
 
   store.recordOpen(id, {
     timestamp: new Date().toISOString(),
     ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-    userAgent: req.headers['user-agent'] || null,
+    userAgent,
+    browser,
+    os,
+    device,
   });
 
   res.set({
@@ -38,6 +48,10 @@ app.get('/opens/:id', (req, res) => {
 
 app.get('/opens', (req, res) => {
   res.json(store.all());
+});
+
+app.get('/api/opens', (req, res) => {
+  res.json(summarize(store.all()));
 });
 
 app.listen(PORT, () => {
